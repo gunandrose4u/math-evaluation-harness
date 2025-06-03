@@ -8,7 +8,7 @@ A unified, precise, and extensible toolkit to benchmark LLMs on various mathemat
 
 ### Features:
 
-- **Models**: Seamless compatibility with models from Hugging Face 🤗 and [vLLM](https://github.com/vllm-project/vllm).
+- **Models**: Seamless compatibility with models from Hugging Face 🤗, [vLLM](https://github.com/vllm-project/vllm), and external API services via OpenAI-compatible endpoints.
 
 - **Datasets**: An extensive array of datasets including `minerva_math`, `math`, `math_oai`, `gsm8k`, `gsm_hard`, `svamp`, `asdiv`, `mawps`, `tabmwp`, `finqa`, `theorem_qa`, `bbh`, `mmlu_stem`, `sat_math`, `mathqa`, `hungarian_exam`.
 
@@ -52,6 +52,8 @@ pip install -r requirements.txt
 
 ### ⚖️ Evaluation
 
+#### Option 1: Local Models
+
 1. Configure model and data settings in `scripts/run_math_eval.sh`, and set the `PROMPT_TYPE` variable accordingly:
    - For base models, choose from: `direct`, `cot`, `pal`, or `tool-integrated`.
    - For SFT models, your options include: `tora`, `wizard_zs`, `deepseek-math`, etc.
@@ -59,9 +61,23 @@ pip install -r requirements.txt
   
 2. Run the script:
 
-```bash  
+```bash
 bash scripts/run_eval.sh $PROMPT_TYPE $MODEL_NAME_OR_PATH
 ```
+
+#### Option 2: External API Services
+
+Use the `--url` parameter to evaluate with external LLM services that follow the OpenAI chat completion protocol:
+
+```bash
+python math_eval.py --url http://localhost:8000 --model_name_or_path meta-llama/Llama-2-7b-chat-hf --data_names gsm8k --prompt_type cot
+```
+
+**Supported API Services:**
+- vLLM OpenAI-compatible server
+- Any service implementing OpenAI chat completions API (`/v1/chat/completions`)
+
+For detailed usage and API requirements, see [URL_USAGE.md](URL_USAGE.md).
 
 
 ## 📊 Results

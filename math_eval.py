@@ -2,6 +2,8 @@ import random
 import os
 import argparse
 import time
+import json
+import requests
 from vllm import LLM, SamplingParams
 from datetime import datetime
 from tqdm import tqdm
@@ -15,7 +17,7 @@ from parser import *
 from trajectory import *
 from data_loader import load_data
 from python_executor import PythonExecutor
-from model_utils import load_hf_lm_and_tokenizer, generate_completions
+from model_utils import load_hf_lm_and_tokenizer, generate_completions, generate_openai_completions
 
 
 def parse_args():
@@ -39,7 +41,11 @@ def parse_args():
     parser.add_argument("--save_outputs", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--use_safetensors", action="store_true")
+    parser.add_argument("--glow_template_path", default=None, type=str, help="Custom path to glow prompt template file")
+    parser.add_argument("--simple_template_path", default=None, type=str, help="Custom path to simple prompt template file")
+    parser.add_argument("--url", default=None, type=str, help="Service URL that hosts LLM model with OpenAI chat completion protocol")
     args = parser.parse_args()
+
     args.top_p = 1 if args.temperature == 0 else args.top_p # top_p must be 1 when using greedy sampling (vllm)
     return args
 
@@ -84,18 +90,24 @@ def prepare_data(data_name, args):
 
 
 def setup(args):
-    # load model
-    available_gpus = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
-    if args.use_vllm:
-        llm = LLM(model=args.model_name_or_path, tensor_parallel_size=len(available_gpus), trust_remote_code=True)
+    # load model only if not using API
+    if args.url:
+        # When using API, we don't need to load local models
+        llm = None
         tokenizer = None
+        print(f"Using API endpoint: {args.url}")
     else:
-        llm, tokenizer =  load_hf_lm_and_tokenizer(
-                model_name_or_path=args.model_name_or_path, 
-                load_in_half=True,
-                use_fast_tokenizer=True,
-                use_safetensors=args.use_safetensors,
-            )
+        available_gpus = os.environ.get('CUDA_VISIBLE_DEVICES', '0').split(',')
+        if args.use_vllm:
+            llm = LLM(model=args.model_name_or_path, tensor_parallel_size=len(available_gpus), trust_remote_code=True)
+            tokenizer = None
+        else:
+            llm, tokenizer =  load_hf_lm_and_tokenizer(
+                    model_name_or_path=args.model_name_or_path,
+                    load_in_half=True,
+                    use_fast_tokenizer=True,
+                    use_safetensors=args.use_safetensors,
+                )
 
     # infer & eval
     data_list = args.data_names.split(',')
@@ -180,7 +192,18 @@ def main(llm, tokenizer, data_name, args):
 
         # get all outputs
         prompts = [item[1] for item in current_prompts]
-        if args.use_vllm:
+        if args.url:
+            # Use OpenAI-compatible API
+            outputs = generate_openai_completions(
+                url=args.url,
+                prompts=prompts,
+                model_name=args.model_name_or_path,
+                max_tokens=args.max_tokens_per_call,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                stop_words=stop_words,
+            )
+        elif args.use_vllm:
             outputs = llm.generate(prompts, SamplingParams(
                             temperature=args.temperature,
                             top_p=args.top_p,

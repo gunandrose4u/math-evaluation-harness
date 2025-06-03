@@ -3,6 +3,8 @@ https://github.com/allenai/open-instruct
 """
 import torch
 import tqdm
+import requests
+import json
 from transformers import StoppingCriteria, StoppingCriteriaList
 
 
@@ -200,10 +202,94 @@ def load_hf_lm_and_tokenizer(
     return model, tokenizer
 
 
+def generate_openai_completions(url, prompts, model_name, max_tokens=1024, temperature=0, top_p=1, stop_words=None, disable_tqdm=False):
+    """
+    Generate completions using OpenAI-compatible API endpoint
+    
+    Args:
+        url (str): The service URL hosting the LLM model
+        prompts (list): List of prompt strings
+        model_name (str): Model name to use in the API request
+        max_tokens (int): Maximum number of tokens to generate
+        temperature (float): Sampling temperature
+        top_p (float): Top-p sampling parameter
+        stop_words (list): List of stop sequences
+        disable_tqdm (bool): Whether to disable progress bar
+    
+    Returns:
+        list: List of generated completions
+    """
+    generations = []
+    
+    if not disable_tqdm:
+        progress = tqdm.tqdm(total=len(prompts), desc="Generating Completions via API")
+    
+    for prompt in prompts:
+        try:
+            # Prepare the request payload following OpenAI chat completion format
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": top_p,
+                "stream": False
+            }
+            
+            # Add stop words if provided
+            if stop_words:
+                payload["stop"] = stop_words
+            
+            # Make the API request
+            response = requests.post(
+                f"{url.rstrip('/')}/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=120  # 2 minute timeout
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if "choices" in result and len(result["choices"]) > 0:
+                    completion = result["choices"][0]["message"]["content"]
+                    generations.append(completion)
+                else:
+                    print(f"Warning: No choices in API response: {result}")
+                    generations.append("")
+            else:
+                print(f"Error: API request failed with status {response.status_code}: {response.text}")
+                generations.append("")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Error: Request failed: {e}")
+            generations.append("")
+        except json.JSONDecodeError as e:
+            print(f"Error: Failed to parse JSON response: {e}")
+            generations.append("")
+        except Exception as e:
+            print(f"Error: Unexpected error: {e}")
+            generations.append("")
+        
+        if not disable_tqdm:
+            progress.update(1)
+    
+    if not disable_tqdm:
+        progress.close()
+    
+    return generations
+
+
 def _test_generate_completions():
     model_name_or_path = "../models/codellama_7b/v1-16k"
     llm, tokenizer = load_hf_lm_and_tokenizer(
-                        model_name_or_path=model_name_or_path, 
+                        model_name_or_path=model_name_or_path,
                         load_in_half=True,
                         use_fast_tokenizer=True,
                         use_safetensors=True,
@@ -217,7 +303,7 @@ def _test_generate_completions():
     ]
 
     stop_sequences = ["\n\n\n", "---"]
-    # Because many tokenizers will treat the word after space differently from the original word alone, 
+    # Because many tokenizers will treat the word after space differently from the original word alone,
     # to be consistent, we add a space before tokenization and remove it after tokenization.
     # stop_id_sequences = [tokenizer.encode(" " + x, add_special_tokens=False)[1:] for x in stop_sequences]
     outputs = generate_completions(

@@ -6,6 +6,8 @@ datasets
 torch
 transformers
 python_dateutil
+requests
+
 
 # math_eval
 sympy==1.12

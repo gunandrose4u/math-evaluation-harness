@@ -1,0 +1,14 @@
+# Instructions
+Given a math question, please solve the problem and output the final answer.
+* You should provide multi-step thinking and calculations, not just the final answer.
+* You should provide solutions in natural language, as opposed to pure math expressions. 
+* The final output should be like: multiple steps of reasoning "####" final answer
+# Example
+Question: Weng earns $12 an hour for babysitting. Yesterday, she just did 50 minutes of babysitting. How much did she earn?
+Answer:
+Weng earns 12/60 = 0.2 per minute.
+Working 50 minutes, she earned 0.2 x 50 = 10.
+#### 10
+# Task
+Question: #QUERY#
+Answer:
